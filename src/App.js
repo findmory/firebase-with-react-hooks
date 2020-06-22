@@ -1,79 +1,74 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
+import { useRecoilState, useSetRecoilState, useRecoilValue } from "recoil";
 
-import * as FirestoreService from './services/firestore';
+import * as FirestoreService from "./services/firestore";
 
-import CreateList from './scenes/CreateList/CreateList';
-import JoinList from './scenes/JoinList/JoinList';
-import EditList from './scenes/EditList/EditList';
-import ErrorMessage from './components/ErrorMessage/ErrorMessage';
+import CreateList from "./scenes/CreateList/CreateList";
+import JoinList from "./scenes/JoinList/JoinList";
+import EditList from "./scenes/EditList/EditList";
+import ErrorMessage from "./components/ErrorMessage/ErrorMessage";
 
-import useQueryString from './hooks/useQueryString'
-
+import {
+  userIdAtom,
+  groceryListAtom,
+  userAtom,
+  groceryListIdAtom,
+} from "./recoilstore/atoms";
 
 function App() {
-
-  const [user, setUser] = useState();
-  const [userId, setUserId] = useState();
-  const [groceryList, setGroceryList] = useState();
   const [error, setError] = useState();
 
-  // Use a custom hook to subscribe to the grocery list ID provided as a URL query parameter
-  const [groceryListId, setGroceryListId] = useQueryString('listId');
+  const setUserId = useSetRecoilState(userIdAtom);
+  const [groceryList, setGroceryList] = useRecoilState(groceryListAtom);
+  const user = useRecoilValue(userAtom);
+  const [groceryListId, setGroceryListId] = useRecoilState(groceryListIdAtom);
+
+  // get listId from query and write it to atom state
+  useEffect(() => {
+    console.log("first load get QS param");
+    const listId = new URLSearchParams(window.location.search).get("listId");
+    setGroceryListId(listId);
+  }, [setGroceryListId]);
 
   // Use an effect to authenticate and load the grocery list from the database
   useEffect(() => {
-    FirestoreService.authenticateAnonymously().then(userCredential => {
-      setUserId(userCredential.user.uid);
-      if (groceryListId) {
-        FirestoreService.getGroceryList(groceryListId)
-          .then(groceryList => {
-            if (groceryList.exists) {
-              setError(null);
-              setGroceryList(groceryList.data());
-            } else {
-              setError('grocery-list-not-found');
-              setGroceryListId();
-            }
-          })
-          .catch(() => setError('grocery-list-get-fail'));
-      }
-    })
-    .catch(() => setError('anonymous-auth-failed'));
-  }, [groceryListId, setGroceryListId]);
+    console.log("groceryListID has changed so running effect");
 
-  function onGroceryListCreate(groceryListId, userName) {
-    setGroceryListId(groceryListId);
-    setUser(userName);
-  }
+    FirestoreService.authenticateAnonymously()
+      .then((userCredential) => {
+        setUserId(userCredential.user.uid);
+        if (groceryListId) {
+          FirestoreService.getGroceryList(groceryListId)
+            .then((groceryList) => {
+              if (groceryList.exists) {
+                setError(null);
+                setGroceryList(groceryList.data());
+              } else {
+                setError("grocery-list-not-found");
+                setGroceryListId();
+              }
+            })
+            .catch(() => setError("grocery-list-get-fail"));
+        }
+      })
+      .catch(() => setError("anonymous-auth-failed"));
+  }, [setGroceryList, groceryListId, setGroceryListId, setUserId]);
 
-  function onCloseGroceryList() {
-    setGroceryListId();
-    setGroceryList();
-    setUser();
-  }
-
-  function onSelectUser(userName) {
-    setUser(userName);
-    FirestoreService.getGroceryList(groceryListId)
-      .then(updatedGroceryList => setGroceryList(updatedGroceryList.data()))
-      .catch(() => setError('grocery-list-get-fail'));
-  }
-  
   // render a scene based on the current state
   if (groceryList && user) {
-    return <EditList {...{ groceryListId, user, onCloseGroceryList, userId}}></EditList>;
-  } else if(groceryList) {
+    return <EditList />;
+  } else if (groceryList) {
     return (
       <div>
         <ErrorMessage errorCode={error}></ErrorMessage>
-        <JoinList users={groceryList.users} {...{groceryListId, onSelectUser, onCloseGroceryList, userId}}></JoinList>
+        <JoinList />
       </div>
     );
   }
   return (
     <div>
       <ErrorMessage errorCode={error}></ErrorMessage>
-      <CreateList onCreate={onGroceryListCreate} userId={userId}></CreateList>
+      <CreateList />
     </div>
   );
 }
